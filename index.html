@@ -148,14 +148,6 @@ body{font-family:'Noto Sans SC',sans-serif;background:var(--bg);color:var(--text
 .friend-msg-btn{background:none;border:none;color:var(--dim);cursor:pointer;font-size:14px;padding:2px;transition:color .15s;}
 .friend-msg-btn:hover{color:var(--accent);}
 
-/* Intimacy levels */
-.level-0{color:var(--dim);}
-.level-1{color:#a8c4a0;}
-.level-2{color:var(--green);}
-.level-3{color:#f0c040;}
-.level-4{color:var(--accent);}
-.level-5{color:#e87b8a;}
-
 /* Notifications */
 .notif-item{display:flex;gap:8px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--border);}
 .notif-item:last-child{border-bottom:none;}
@@ -481,7 +473,6 @@ const EMOJIS=['😊','😂','🥰','😍','🤩','😎','🥲','😢','😭','�
 const REACT_EMOJIS=['❤️','😂','😮','😢','👍','🔥'];
 const AVATARS=['🐱','🦊','🐼','🐨','🦁','🐸','🌸','🌙','⭐','🍀','🎸','🎨','🐧','🦋','🌺','🐠','🍓','🌻'];
 
-// Intimacy levels
 const INTIMACY_LEVELS=[
   {min:0,  max:10,  label:'陌生人',  hearts:'🤍🤍🤍🤍🤍', color:'#c8bdb0'},
   {min:10, max:30,  label:'认识',    hearts:'💛🤍🤍🤍🤍', color:'#f0c040'},
@@ -495,7 +486,6 @@ function getIntimacyLevel(score){
   return INTIMACY_LEVELS.find(l=>score>=l.min&&score<l.max)||INTIMACY_LEVELS[0];
 }
 
-// Init
 document.getElementById('avatarGrid').innerHTML=AVATARS.map(e=>
   `<span class="avatar-opt${e===selectedAvatar?' selected':''}" onclick="pickAvatar(this,'${e}')">${e}</span>`).join('');
 document.getElementById('emojiGrid').innerHTML=EMOJIS.map(e=>
@@ -519,9 +509,17 @@ async function doLogin(){
   const pass=document.getElementById('loginPassword').value;
   if(!email||!pass){setErr('请填写邮箱和密码');return;}
   const btn=document.getElementById('loginBtn');btn.disabled=true;btn.textContent='登录中…';
-  const{error}=await sb.auth.signInWithPassword({email,password:pass});
+  const{data, error}=await sb.auth.signInWithPassword({email,password:pass});
   btn.disabled=false;btn.textContent='登录';
-  if(error)setErr(error.message.includes('Invalid')?'邮箱或密码错误':'登录失败：'+error.message);
+  if(error) {
+    setErr(error.message.includes('Invalid')?'邮箱或密码错误':'登录失败：'+error.message);
+  } else if(data.user) {
+    // 登录成功，手动设置当前用户并刷新UI
+    currentUser = data.user;
+    await loadMyProfile();
+    updateAppView(true);
+    loadAll();
+  }
 }
 
 async function doRegister(){
@@ -539,23 +537,32 @@ async function doRegister(){
   showToast('注册成功！请查收验证邮件后登录 📧');switchTab('login');
 }
 
-async function doLogout(){await sb.auth.signOut();closePanel('profilePanel');}
+async function doLogout(){await sb.auth.signOut();updateAppView(false);closePanel('profilePanel');}
+
+function updateAppView(isLoggedIn) {
+  if(isLoggedIn) {
+    document.getElementById('authScreen').style.display='none';
+    document.getElementById('appLayout').classList.add('visible');
+  } else {
+    document.getElementById('authScreen').style.display='flex';
+    document.getElementById('appLayout').classList.remove('visible');
+  }
+}
 
 sb.auth.onAuthStateChange(async(event,session)=>{
   if(session?.user){
     currentUser=session.user;
     await loadMyProfile();
-    document.getElementById('authScreen').style.display='none';
-    document.getElementById('appLayout').classList.add('visible');
+    updateAppView(true);
     loadAll();
   } else {
     currentUser=null;myProfile=null;
-    document.getElementById('authScreen').style.display='flex';
-    document.getElementById('appLayout').classList.remove('visible');
+    updateAppView(false);
   }
 });
 
 async function loadMyProfile(){
+  if(!currentUser) return;
   const{data}=await sb.from('profiles').select('*').eq('id',currentUser.id).single();
   myProfile=data;
   if(myProfile){
@@ -572,8 +579,8 @@ async function loadAll(){
   subscribeRealtime();
 }
 
-// ── Circles ──
 async function loadCircles(){
+  if(!currentUser) return;
   const{data}=await sb.from('circles').select('*').eq('owner_id',currentUser.id).order('created_at');
   circles=data||[];renderCircles();loadPosts();
 }
@@ -588,14 +595,25 @@ function renderCircles(){
 }
 function setCircle(id){currentCircle=id;renderCircles();loadPosts();}
 
-// ── Posts ──
 async function loadPosts(){
+  if(!currentUser) return;
   document.getElementById('postFeed').innerHTML='<div class="loading-dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>';
+  
   let q=sb.from('posts').select(`*,profiles(id,username,avatar),circles(name,color),likes(user_id,emoji),comments(id,content,user_id,created_at,profiles(username,avatar))`).order('created_at',{ascending:false}).limit(40);
-  if(currentCircle!=='all')q=q.eq('circle_id',currentCircle);
-  else if(circles.length>0)q=q.in('circle_id',circles.map(c=>c.id));
-  const{data}=await q;
-  if(!data||data.length===0){
+  
+  if(currentCircle!=='all') {
+    q=q.eq('circle_id',currentCircle);
+  } else {
+    // 关键修复：只有当存在圈子时才加 in 过滤，否则直接拉取公共或自己的动态
+    if(circles.length > 0) {
+       const circleIds = circles.map(c=>c.id);
+       // 同时也包含没有圈子的动态 (is null)
+       q = q.or(`circle_id.in.(${circleIds.join(',')}),circle_id.is.null`);
+    }
+  }
+  
+  const{data, error}=await q;
+  if(error || !data || data.length===0){
     document.getElementById('postFeed').innerHTML=`<div class="feed-empty"><div class="feed-empty-icon">✨</div><div class="feed-empty-text">还没有动态<br>先发一条和朋友分享今天吧～</div></div>`;
     return;
   }
@@ -684,7 +702,6 @@ async function addComment(postId){
   loadPosts();setTimeout(()=>toggleComments(postId),80);
 }
 
-// ── Images ──
 function previewImages(input){
   selectedFiles=Array.from(input.files);
   document.getElementById('imgPreviewWrap').innerHTML=selectedFiles.map((f,i)=>{
@@ -722,12 +739,10 @@ async function submitPost(){
   showToast('发布成功 ✨');loadPosts();
 }
 
-// ── Emoji picker ──
 function toggleEmojiPicker(){document.getElementById('emojiPicker').classList.toggle('open');}
 function insertEmoji(e){document.getElementById('postInput').value+=e;document.getElementById('emojiPicker').classList.remove('open');document.getElementById('postInput').focus();}
 document.addEventListener('click',e=>{if(!e.target.closest('#emojiPicker')&&!e.target.closest('.composer-tool'))document.getElementById('emojiPicker').classList.remove('open');});
 
-// ── Circles CRUD ──
 function openNewCircle(){document.getElementById('circleModal').classList.add('open');}
 function closeModal(){document.getElementById('circleModal').classList.remove('open');}
 function selectColor(el,c){selectedColor=c;document.querySelectorAll('#colorPicker div').forEach(d=>d.style.border='2px solid transparent');el.style.border='3px solid '+c;}
@@ -739,8 +754,8 @@ async function createCircle(){
   closeModal();document.getElementById('newCircleName').value='';showToast(`「${name}」创建成功！`);loadCircles();
 }
 
-// ── Friend Requests ──
 async function loadFriendRequests(){
+  if(!currentUser) return;
   const{data}=await sb.from('friend_requests').select('*,profiles!friend_requests_from_user_id_fkey(id,username,avatar)').eq('to_user_id',currentUser.id).eq('status','pending');
   const reqs=data||[];
   document.getElementById('friendBadge').classList.toggle('show',reqs.length>0);
@@ -775,6 +790,7 @@ async function sendFriendRequest(toId,toName){
 }
 
 async function loadFriends(){
+  if(!currentUser) return;
   const{data:sent}=await sb.from('friend_requests').select('to_user_id,profiles!friend_requests_to_user_id_fkey(id,username,avatar)').eq('from_user_id',currentUser.id).eq('status','accepted');
   const{data:recv}=await sb.from('friend_requests').select('from_user_id,profiles!friend_requests_from_user_id_fkey(id,username,avatar)').eq('to_user_id',currentUser.id).eq('status','accepted');
   const friends=[];
@@ -783,7 +799,7 @@ async function loadFriends(){
   friendsCache=friends;
   document.getElementById('friendCount').textContent=friends.length>0?`(${friends.length})`:'';
   if(friends.length===0){document.getElementById('friendList').innerHTML='<div style="font-size:11px;color:var(--dim)">还没有好友，快去搜索添加吧～</div>';return;}
-  // Load intimacy for each friend
+  
   const intimacies={};
   for(const f of friends){
     const score=await getIntimacyScore(f.id);
@@ -808,8 +824,8 @@ async function loadFriends(){
   }).join('');
 }
 
-// ── Intimacy ──
 async function getIntimacyScore(otherId){
+  if(!currentUser) return 0;
   const[a,b]=[currentUser.id,otherId].sort();
   const{data}=await sb.from('intimacy').select('score').eq('user_a',a).eq('user_b',b).maybeSingle();
   return data?.score||0;
@@ -825,7 +841,6 @@ async function addIntimacy(otherId,points){
   }
 }
 
-// ── DM ──
 async function openDM(uid,name,avatar){
   dmUserId=uid;
   document.getElementById('dmAvatar').textContent=avatar;
@@ -833,7 +848,7 @@ async function openDM(uid,name,avatar){
   document.getElementById('dmPanel').classList.add('open');
   document.getElementById('dmMessages').innerHTML='<div class="loading-dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>';
   await loadDMs();
-  // Subscribe to new messages
+  
   if(dmChannel)dmChannel.unsubscribe();
   dmChannel=sb.channel('dm-'+[currentUser.id,uid].sort().join('-'))
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'messages'},msg=>{
@@ -852,7 +867,6 @@ async function loadDMs(){
     }).join('');
   const el=document.getElementById('dmMessages');
   el.scrollTop=el.scrollHeight;
-  // Mark as read & add intimacy
   await sb.from('messages').update({read:true}).eq('to_user_id',currentUser.id).eq('from_user_id',dmUserId).eq('read',false);
 }
 
@@ -866,7 +880,6 @@ async function sendDM(){
   loadDMs();
 }
 
-// ── Search ──
 function openSearch(){document.getElementById('searchPanel').classList.add('open');document.getElementById('searchInput').value='';document.getElementById('searchResults').innerHTML='<div class="search-empty">输入用户名开始搜索</div>';setTimeout(()=>document.getElementById('searchInput').focus(),100);}
 let searchTimer;
 function doSearch(q){
@@ -884,7 +897,6 @@ function doSearch(q){
   },300);
 }
 
-// ── Profile ──
 async function openUserProfile(uid){
   if(!uid)return;
   const{data:user}=await sb.from('profiles').select('*').eq('id',uid).single();
@@ -893,17 +905,17 @@ async function openUserProfile(uid){
   document.getElementById('profileAvatarBig').textContent=user.avatar||'👤';
   document.getElementById('profileNameBig').textContent=user.username;
   document.getElementById('profileBioText').textContent=user.bio||'这个人很懒，什么都没写～';
-  // Posts
+  
   const{data:posts}=await sb.from('posts').select('*').eq('user_id',uid).order('created_at',{ascending:false}).limit(5);
   document.getElementById('profilePostCount').textContent=posts?.length||0;
-  // Likes
+  
   const{count:likeCount}=await sb.from('likes').select('*',{count:'exact',head:true}).in('post_id',(posts||[]).map(p=>p.id));
   document.getElementById('profileLikeCount').textContent=likeCount||0;
-  // Friends count
+  
   const{count:fc1}=await sb.from('friend_requests').select('*',{count:'exact',head:true}).eq('from_user_id',uid).eq('status','accepted');
   const{count:fc2}=await sb.from('friend_requests').select('*',{count:'exact',head:true}).eq('to_user_id',uid).eq('status','accepted');
   document.getElementById('profileFriendCount').textContent=(fc1||0)+(fc2||0);
-  // Intimacy (only show if not self)
+  
   const intimacyDiv=document.getElementById('intimacyDisplay');
   if(!isMe){
     const score=await getIntimacyScore(uid);
@@ -915,10 +927,10 @@ async function openUserProfile(uid){
     document.getElementById('intimacyFill').style.width=pct+'%';
     document.getElementById('intimacyScoreText').textContent=`亲密度 ${score} 分 · 互动越多越亲密 💕`;
   } else {intimacyDiv.style.display='none';}
-  // Posts list
+  
   document.getElementById('profilePostsList').innerHTML=(posts||[]).map(p=>`
     <div class="profile-post-mini">${p.content.slice(0,60)}${p.content.length>60?'…':''}<br><span style="font-size:10px;color:var(--dim)">${timeAgo(p.created_at)}</span></div>`).join('');
-  // Actions
+  
   document.getElementById('logoutBtn').style.display=isMe?'':'none';
   if(isMe){
     document.getElementById('profileActions').innerHTML='';
@@ -932,8 +944,8 @@ async function openUserProfile(uid){
 }
 function openMyProfile(){openUserProfile(currentUser.id);}
 
-// ── Notifications ──
 async function loadNotifs(){
+  if(!currentUser) return;
   const{data}=await sb.from('notifications').select('*').eq('user_id',currentUser.id).order('created_at',{ascending:false}).limit(8).catch(()=>({data:null}));
   if(!data||data.length===0){document.getElementById('notifList').innerHTML='<div style="font-size:11px;color:var(--dim)">暂无通知</div>';return;}
   const unread=data.filter(n=>!n.read).length;
@@ -948,6 +960,7 @@ async function loadNotifs(){
 }
 
 function subscribeRealtime(){
+  if(!currentUser) return;
   sb.channel('app-realtime')
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'notifications',filter:`user_id=eq.${currentUser.id}`},()=>{
       loadNotifs();loadFriendRequests();
@@ -961,7 +974,6 @@ function subscribeRealtime(){
     .subscribe();
 }
 
-// ── Utils ──
 function showFeed(){currentCircle='all';renderCircles();loadPosts();}
 function showFriendsPane(){loadFriendRequests();loadFriends();}
 function openLightbox(url){document.getElementById('lightboxImg').src=url;document.getElementById('lightbox').classList.add('open');}
