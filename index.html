@@ -1,0 +1,1109 @@
+<!DOCTYPE html>  
+<html lang="zh-CN">  
+<head>  
+<meta charset="UTF-8">  
+<meta name="viewport" content="width=device-width, initial-scale=1.0">  
+<title>小圈子</title>  
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>  
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&family=Lora:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">  
+<style>  
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}  
+:root{  
+  --bg:#fdf8f3;--surface:#fff;--surface2:#faf6f1;--border:#ede8e0;  
+  --text:#2d2520;--muted:#9e8e80;--dim:#c8bdb0;  
+  --accent:#e8734a;--accent2:#6b9e78;--accent3:#7b8fc4;--pink:#e8a0b0;  
+  --shadow:0 2px 16px rgba(45,37,32,0.08);--shadow-lg:0 8px 40px rgba(45,37,32,0.14);  
+}  
+body{font-family:'Noto Sans SC',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;}  
+  
+/* ── Auth Screen ── */  
+.auth-screen{  
+  min-height:100vh;display:flex;align-items:center;justify-content:center;  
+  background:linear-gradient(135deg,#fdf8f3 0%,#fdf0e8 100%);  
+}  
+.auth-box{  
+  background:var(--surface);border-radius:24px;padding:40px 36px;  
+  width:400px;max-width:90vw;box-shadow:var(--shadow-lg);  
+}  
+.auth-logo{font-family:'Lora',serif;font-size:32px;color:var(--accent);margin-bottom:6px;}  
+.auth-tagline{font-size:13px;color:var(--muted);margin-bottom:32px;line-height:1.6;}  
+.auth-tabs{display:flex;gap:0;margin-bottom:24px;border:1px solid var(--border);border-radius:10px;overflow:hidden;}  
+.auth-tab{  
+  flex:1;padding:10px;background:transparent;border:none;  
+  font-family:inherit;font-size:13px;cursor:pointer;transition:all 0.2s;color:var(--muted);  
+}  
+.auth-tab.active{background:var(--accent);color:#fff;}  
+.auth-field{margin-bottom:14px;}  
+.auth-label{font-size:11px;letter-spacing:0.08em;color:var(--muted);margin-bottom:6px;display:block;text-transform:uppercase;}  
+.auth-input{  
+  width:100%;background:var(--surface2);border:1px solid var(--border);  
+  color:var(--text);padding:11px 14px;font-family:inherit;font-size:13px;  
+  border-radius:10px;outline:none;transition:border-color 0.2s;  
+}  
+.auth-input:focus{border-color:var(--accent);}  
+.auth-btn{  
+  width:100%;padding:13px;background:var(--accent);color:#fff;border:none;  
+  border-radius:10px;font-family:inherit;font-size:14px;font-weight:500;  
+  cursor:pointer;transition:opacity 0.2s;margin-top:6px;letter-spacing:0.04em;  
+}  
+.auth-btn:hover{opacity:0.85;}  
+.auth-btn:disabled{opacity:0.5;cursor:not-allowed;}  
+.auth-err{font-size:12px;color:#e87b8a;margin-top:10px;text-align:center;}  
+  
+/* ── App Layout ── */  
+.app-layout{display:none;height:100vh;overflow:hidden;}  
+.app-layout.visible{display:flex;}  
+  
+.sidebar{  
+  width:72px;background:var(--surface);border-right:1px solid var(--border);  
+  display:flex;flex-direction:column;align-items:center;padding:20px 0;gap:6px;  
+  position:fixed;left:0;top:0;bottom:0;z-index:50;  
+}  
+.sidebar-logo{font-family:'Lora',serif;font-size:22px;color:var(--accent);margin-bottom:16px;}  
+.nav-icon{  
+  width:44px;height:44px;display:flex;align-items:center;justify-content:center;  
+  border-radius:12px;font-size:20px;cursor:pointer;transition:all 0.2s;color:var(--dim);  
+}  
+.nav-icon:hover{background:var(--surface2);color:var(--text);}  
+.nav-icon.active{background:rgba(232,115,74,0.1);color:var(--accent);}  
+.sidebar-bottom{margin-top:auto;display:flex;flex-direction:column;align-items:center;gap:8px;}  
+.my-avatar-btn{  
+  width:36px;height:36px;border-radius:50%;  
+  display:flex;align-items:center;justify-content:center;  
+  font-size:18px;border:2px solid var(--border);cursor:pointer;  
+  background:linear-gradient(135deg,#e8734a20,#e8a0b020);transition:border-color 0.2s;  
+}  
+.my-avatar-btn:hover{border-color:var(--accent);}  
+  
+.main-area{margin-left:72px;display:flex;width:calc(100vw - 72px);height:100vh;overflow:hidden;}  
+  
+/* Left col */  
+.left-col{  
+  width:220px;min-width:220px;background:var(--surface);  
+  border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;  
+}  
+.col-header{  
+  padding:20px 16px 12px;font-size:11px;letter-spacing:0.12em;text-transform:uppercase;  
+  color:var(--muted);font-weight:500;border-bottom:1px solid var(--border);  
+  display:flex;justify-content:space-between;align-items:center;  
+}  
+.col-add-btn{  
+  width:22px;height:22px;border-radius:6px;background:var(--surface2);  
+  border:none;color:var(--muted);cursor:pointer;font-size:14px;  
+  display:flex;align-items:center;justify-content:center;transition:all 0.2s;  
+}  
+.col-add-btn:hover{background:var(--accent);color:#fff;}  
+.circles-list{overflow-y:auto;flex:1;padding:10px 8px;}  
+.circle-item{  
+  display:flex;align-items:center;gap:10px;padding:9px 10px;  
+  border-radius:10px;cursor:pointer;transition:background 0.15s;margin-bottom:2px;  
+}  
+.circle-item:hover{background:var(--surface2);}  
+.circle-item.active{background:rgba(232,115,74,0.08);}  
+.circle-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}  
+.circle-name{font-size:13px;flex:1;}  
+.circle-item.active .circle-name{color:var(--accent);font-weight:500;}  
+.circle-count{font-size:10px;color:var(--dim);min-width:1.2em;text-align:right;}  
+  
+.left-col-main{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;}  
+.left-col-friends{  
+  flex:0 0 38%;min-height:120px;max-height:42vh;border-top:1px solid var(--border);  
+  display:flex;flex-direction:column;overflow:hidden;background:var(--surface2);  
+}  
+.friends-header{border-bottom:1px solid var(--border);}  
+.friends-list{overflow-y:auto;flex:1;padding:8px 10px 12px;}  
+.friend-row{  
+  display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;  
+  margin-bottom:2px;cursor:default;transition:background 0.15s;  
+}  
+.friend-row:hover{background:rgba(255,255,255,0.6);}  
+.friend-avatar{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;background:var(--surface);flex-shrink:0;}  
+.friend-name{font-size:13px;flex:1;}  
+.friend-status{width:8px;height:8px;border-radius:50%;flex-shrink:0;}  
+.friend-status.online{background:var(--accent2);}  
+.friend-status.away{background:#e8c16a;}  
+.friends-hint{font-size:11px;color:var(--dim);padding:8px 10px;line-height:1.5;}  
+  
+.right-col{  
+  width:280px;min-width:260px;max-width:32vw;background:var(--surface);  
+  border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;  
+}  
+.right-block{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;border-bottom:1px solid var(--border);}  
+.right-block:last-child{border-bottom:none;}  
+.today-stat{font-size:28px;font-weight:600;color:var(--accent);font-family:'Lora',serif;padding:12px 16px 4px;}  
+.today-sub{font-size:12px;color:var(--muted);padding:0 16px 12px;}  
+.today-list{padding:0 12px 12px;overflow-y:auto;flex:1;}  
+.today-item{  
+  font-size:12px;color:var(--text);padding:10px 12px;margin-bottom:6px;  
+  background:var(--surface2);border-radius:12px;border:1px solid var(--border);line-height:1.5;  
+}  
+.today-item-meta{font-size:10px;color:var(--muted);margin-top:4px;}  
+.recent-list{overflow-y:auto;flex:1;padding:8px 12px 16px;}  
+.recent-item{  
+  display:flex;align-items:flex-start;gap:10px;padding:10px 10px;margin-bottom:6px;  
+  border-radius:12px;background:var(--surface2);border:1px solid var(--border);font-size:12px;line-height:1.55;  
+}  
+.recent-icon{flex-shrink:0;font-size:16px;margin-top:1px;}  
+.recent-text{color:var(--text);}  
+.recent-time{font-size:10px;color:var(--muted);margin-top:4px;}  
+.right-empty{font-size:12px;color:var(--muted);padding:12px 16px;line-height:1.6;}  
+  
+/* Feed */  
+.feed-col{flex:1;min-width:0;overflow-y:auto;padding:28px 28px 32px;display:flex;flex-direction:column;}  
+.feed-col-title{font-family:'Lora',serif;font-size:18px;color:var(--text);margin-bottom:16px;}  
+  
+.composer{  
+  background:var(--surface);border:1px solid var(--border);border-radius:16px;  
+  padding:18px 20px;margin-bottom:24px;box-shadow:var(--shadow);  
+}  
+.composer-top{display:flex;gap:12px;align-items:flex-start;}  
+.composer-avatar{  
+  width:40px;height:40px;border-radius:50%;flex-shrink:0;  
+  display:flex;align-items:center;justify-content:center;font-size:20px;  
+  background:linear-gradient(135deg,rgba(232,115,74,0.15),rgba(232,160,176,0.15));  
+}  
+.composer-input{  
+  flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:10px;  
+  padding:10px 14px;font-family:inherit;font-size:13px;color:var(--text);  
+  resize:none;outline:none;min-height:44px;max-height:120px;  
+  transition:border-color 0.2s;line-height:1.6;  
+}  
+.composer-input:focus{border-color:var(--accent);}  
+.composer-input::placeholder{color:var(--dim);}  
+.composer-bottom{  
+  display:flex;align-items:center;gap:8px;margin-top:12px;  
+  padding-top:12px;border-top:1px solid var(--border);  
+}  
+.composer-tool{  
+  background:none;border:none;color:var(--muted);font-size:16px;  
+  cursor:pointer;padding:4px 8px;border-radius:6px;transition:all 0.15s;  
+}  
+.composer-tool:hover{background:var(--surface2);color:var(--accent);}  
+.circle-picker{  
+  background:var(--surface2);border:1px solid var(--border);color:var(--text);  
+  font-family:inherit;font-size:11px;padding:5px 10px;border-radius:20px;outline:none;cursor:pointer;  
+}  
+.post-btn{  
+  margin-left:auto;background:var(--accent);color:#fff;border:none;  
+  padding:7px 20px;border-radius:20px;font-family:inherit;font-size:12px;  
+  font-weight:500;cursor:pointer;transition:opacity 0.2s;  
+}  
+.post-btn:hover{opacity:0.85;}  
+.post-btn:disabled{opacity:0.5;cursor:not-allowed;}  
+.composer-mood-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);}  
+.composer-mood-label{font-size:11px;color:var(--muted);width:100%;margin-bottom:2px;}  
+.composer-mood-btn{  
+  width:34px;height:34px;border-radius:10px;border:2px solid transparent;background:var(--surface2);  
+  font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.15s;  
+}  
+.composer-mood-btn:hover{border-color:var(--accent);}  
+.composer-mood-btn.on{border-color:var(--accent);background:rgba(232,115,74,0.12);}  
+.composer-img-wrap{margin-top:10px;display:none;align-items:flex-start;gap:10px;}  
+.composer-img-wrap.visible{display:flex;}  
+.composer-preview{max-height:140px;max-width:100%;border-radius:12px;border:1px solid var(--border);object-fit:cover;}  
+.composer-remove-img{font-size:11px;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);cursor:pointer;color:var(--muted);}  
+.composer-remove-img:hover{border-color:#e87b8a;color:#e87b8a;}  
+  
+/* Posts */  
+.post-card{  
+  background:var(--surface);border:1px solid var(--border);border-radius:16px;  
+  padding:18px 20px;margin-bottom:16px;box-shadow:var(--shadow);  
+  animation:fadeUp 0.4s ease;transition:box-shadow 0.2s;  
+}  
+.post-card:hover{box-shadow:var(--shadow-lg);}  
+.post-header{display:flex;align-items:center;gap:12px;margin-bottom:12px;}  
+.post-avatar{  
+  width:40px;height:40px;border-radius:50%;flex-shrink:0;  
+  display:flex;align-items:center;justify-content:center;font-size:20px;  
+}  
+.post-meta{flex:1;}  
+.post-author{font-size:14px;font-weight:500;}  
+.post-time{font-size:11px;color:var(--muted);margin-top:1px;}  
+.post-circle-tag{font-size:10px;padding:3px 10px;border-radius:20px;font-weight:500;}  
+.post-mood{  
+  display:inline-block;font-size:22px;background:var(--surface2);  
+  padding:8px 14px;border-radius:12px;margin-bottom:12px;  
+}  
+.post-body{font-size:13px;line-height:1.8;margin-bottom:14px;}  
+.post-image{  
+  width:100%;max-height:320px;object-fit:cover;border-radius:12px;margin-bottom:14px;  
+  border:1px solid var(--border);display:block;background:var(--surface2);  
+}  
+.post-footer{display:flex;align-items:center;gap:16px;padding-top:12px;border-top:1px solid var(--border);}  
+.reaction-btn{  
+  display:flex;align-items:center;gap:5px;background:none;border:none;  
+  color:var(--muted);font-family:inherit;font-size:12px;cursor:pointer;  
+  padding:4px 8px;border-radius:6px;transition:all 0.15s;  
+}  
+.reaction-btn:hover{background:var(--surface2);color:var(--accent);}  
+.reaction-btn.liked{color:var(--accent);}  
+  
+.comments-section{margin-top:12px;display:flex;flex-direction:column;gap:8px;}  
+.comment{display:flex;gap:8px;align-items:flex-start;}  
+.comment-avatar{  
+  width:26px;height:26px;border-radius:50%;flex-shrink:0;  
+  display:flex;align-items:center;justify-content:center;font-size:13px;background:var(--surface2);  
+}  
+.comment-bubble{background:var(--surface2);border-radius:10px;padding:7px 12px;font-size:12px;line-height:1.6;flex:1;}  
+.comment-name{font-weight:500;font-size:11px;margin-bottom:2px;color:var(--muted);}  
+.comment-input-row{display:flex;gap:8px;margin-top:8px;align-items:center;}  
+.comment-input{  
+  flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:20px;  
+  padding:7px 14px;font-family:inherit;font-size:12px;color:var(--text);outline:none;transition:border-color 0.2s;  
+}  
+.comment-input:focus{border-color:var(--accent);}  
+.comment-send{  
+  background:none;border:1px solid var(--border);color:var(--muted);  
+  padding:7px 14px;border-radius:20px;font-family:inherit;font-size:11px;cursor:pointer;transition:all 0.15s;  
+}  
+.comment-send:hover{background:var(--accent);color:#fff;border-color:var(--accent);}  
+  
+/* Empty / loading */  
+.feed-empty{text-align:center;padding:60px 20px;color:var(--muted);}  
+.feed-empty-icon{font-size:40px;margin-bottom:12px;opacity:0.4;}  
+.feed-empty-text{font-size:13px;line-height:1.8;}  
+.loading-dots{display:flex;gap:6px;justify-content:center;padding:40px;}  
+.dot{width:8px;height:8px;background:var(--accent);border-radius:50%;animation:pulse 1.2s ease infinite;}  
+.dot:nth-child(2){animation-delay:0.2s;}  
+.dot:nth-child(3){animation-delay:0.4s;}  
+  
+/* Modal */  
+.modal-overlay{  
+  position:fixed;inset:0;background:rgba(45,37,32,0.4);backdrop-filter:blur(4px);  
+  z-index:200;display:flex;align-items:center;justify-content:center;  
+  opacity:0;pointer-events:none;transition:opacity 0.2s;  
+}  
+.modal-overlay.open{opacity:1;pointer-events:all;}  
+.modal{  
+  background:var(--surface);border-radius:20px;padding:28px 32px;  
+  width:400px;max-width:90vw;box-shadow:var(--shadow-lg);  
+  transform:translateY(20px);transition:transform 0.25s;  
+}  
+.modal-overlay.open .modal{transform:translateY(0);}  
+.modal-title{font-family:'Lora',serif;font-size:20px;margin-bottom:6px;}  
+.modal-sub{font-size:12px;color:var(--muted);margin-bottom:24px;}  
+.modal-field{margin-bottom:16px;}  
+.modal-label{font-size:11px;letter-spacing:0.08em;color:var(--muted);margin-bottom:6px;display:block;text-transform:uppercase;}  
+.modal-input{  
+  width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);  
+  padding:10px 14px;font-family:inherit;font-size:13px;border-radius:10px;outline:none;transition:border-color 0.2s;  
+}  
+.modal-input:focus{border-color:var(--accent);}  
+.modal-row{display:flex;gap:10px;}  
+.modal-btn{flex:1;padding:11px;border-radius:10px;font-family:inherit;font-size:13px;cursor:pointer;transition:all 0.2s;font-weight:500;}  
+.modal-btn-primary{background:var(--accent);color:#fff;border:none;}  
+.modal-btn-primary:hover{opacity:0.85;}  
+.modal-btn-secondary{background:var(--surface2);color:var(--muted);border:1px solid var(--border);}  
+  
+/* Profile modal */  
+.profile-info{display:flex;align-items:center;gap:14px;margin-bottom:20px;padding:16px;background:var(--surface2);border-radius:12px;}  
+.profile-big-avatar{font-size:36px;}  
+.profile-name{font-size:16px;font-weight:500;}  
+.profile-email{font-size:11px;color:var(--muted);margin-top:3px;}  
+.logout-btn{  
+  width:100%;padding:11px;background:transparent;border:1px solid #e87b8a;  
+  color:#e87b8a;border-radius:10px;font-family:inherit;font-size:13px;cursor:pointer;transition:all 0.2s;  
+}  
+.logout-btn:hover{background:#e87b8a;color:#fff;}  
+  
+/* Toast */  
+.toast{  
+  position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(80px);  
+  background:var(--text);color:#fff;padding:10px 20px;border-radius:20px;  
+  font-size:12px;z-index:300;transition:transform 0.3s;pointer-events:none;white-space:nowrap;  
+}  
+.toast.show{transform:translateX(-50%) translateY(0);}  
+  
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}  
+@keyframes pulse{0%,100%{opacity:0.2;transform:scale(0.8)}50%{opacity:1;transform:scale(1.2)}}  
+</style>  
+</head>  
+<body>  
+  
+<!-- ── Auth Screen ── -->  
+<div class="auth-screen" id="authScreen">  
+  <div class="auth-box">  
+    <div class="auth-logo">○ 小圈子</div>  
+    <div class="auth-tagline">和异地好友分享你的每一天<br>不同圈子，不同故事</div>  
+    <div class="auth-tabs">  
+      <button class="auth-tab active" id="loginTab" onclick="switchAuthTab('login')">登录</button>  
+      <button class="auth-tab" id="registerTab" onclick="switchAuthTab('register')">注册</button>  
+    </div>  
+    <div id="loginForm">  
+      <div class="auth-field">  
+        <label class="auth-label">邮箱</label>  
+        <input class="auth-input" id="loginEmail" type="email" placeholder="your@email.com">  
+      </div>  
+      <div class="auth-field">  
+        <label class="auth-label">密码</label>  
+        <input class="auth-input" id="loginPassword" type="password" placeholder="••••••••">  
+      </div>  
+      <button class="auth-btn" id="loginBtn" onclick="doLogin()">登录</button>  
+    </div>  
+    <div id="registerForm" style="display:none;">  
+      <div class="auth-field">  
+        <label class="auth-label">昵称</label>  
+        <input class="auth-input" id="regUsername" type="text" placeholder="你的名字">  
+      </div>  
+      <div class="auth-field">  
+        <label class="auth-label">邮箱</label>  
+        <input class="auth-input" id="regEmail" type="email" placeholder="your@email.com">  
+      </div>  
+      <div class="auth-field">  
+        <label class="auth-label">密码（至少6位）</label>  
+        <input class="auth-input" id="regPassword" type="password" placeholder="••••••••">  
+      </div>  
+      <div class="auth-field">  
+        <label class="auth-label">选个头像</label>  
+        <div style="display:flex;gap:8px;flex-wrap:wrap;" id="avatarPicker">  
+          🐱🦊🐼🐨🦁🐸🌸🌙⭐🍀🎸🎨  
+        </div>  
+      </div>  
+      <button class="auth-btn" id="registerBtn" onclick="doRegister()">创建账号</button>  
+    </div>  
+    <div class="auth-err" id="authErr"></div>  
+  </div>  
+</div>  
+  
+<!-- ── App Layout ── -->  
+<div class="app-layout" id="appLayout">  
+  <div class="sidebar">  
+    <div class="sidebar-logo">○</div>  
+    <div class="nav-icon active">🏠</div>  
+    <div class="nav-icon" onclick="showToast('更多功能即将上线～')">🔍</div>  
+    <div class="nav-icon" onclick="showToast('消息功能即将上线～')">💬</div>  
+    <div class="sidebar-bottom">  
+      <div class="my-avatar-btn" id="myAvatarBtn" onclick="openProfile()">🐱</div>  
+    </div>  
+  </div>  
+  
+  <div class="main-area">  
+    <!-- Left col -->  
+    <div class="left-col">  
+      <div class="left-col-main">  
+        <div class="col-header">  
+          我的圈子  
+          <button class="col-add-btn" onclick="openNewCircle()">＋</button>  
+        </div>  
+        <div class="circles-list" id="circleList"></div>  
+      </div>  
+      <div class="left-col-friends">  
+        <div class="col-header friends-header">好友</div>  
+        <div class="friends-list" id="friendsList"></div>  
+      </div>  
+    </div>  
+  
+    <!-- Feed -->  
+    <div class="feed-col" id="feedCol">  
+      <div class="feed-col-title">动态</div>  
+      <div class="composer">  
+        <div class="composer-top">  
+          <div class="composer-avatar" id="composerAvatar">🐱</div>  
+          <textarea class="composer-input" id="postInput" placeholder="今天你做了什么？和朋友们分享吧～" rows="2"></textarea>  
+        </div>  
+        <div class="composer-mood-row" id="composerMoodRow"></div>  
+        <div class="composer-img-wrap" id="composerImgWrap">  
+          <img class="composer-preview" id="composerPreview" alt="预览">  
+          <button type="button" class="composer-remove-img" onclick="clearComposerImage()">移除图片</button>  
+        </div>  
+        <div class="composer-bottom">  
+          <button type="button" class="composer-tool" title="插入表情到正文" onclick="insertMoodToText()">😊</button>  
+          <button type="button" class="composer-tool" title="添加图片" onclick="document.getElementById('postImageInput').click()">🖼️</button>  
+          <input type="file" id="postImageInput" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none" onchange="onComposerImageChange(event)">  
+          <select class="circle-picker" id="circleSelect"><option value="">选择圈子</option></select>  
+          <button class="post-btn" id="postBtn" onclick="submitPost()">发布</button>  
+        </div>  
+      </div>  
+      <div id="postFeed">  
+        <div class="loading-dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>  
+      </div>  
+    </div>  
+  
+    <aside class="right-col" id="rightCol">  
+      <div class="right-block">  
+        <div class="col-header">今日动态</div>  
+        <div id="todayPanel">  
+          <div class="today-stat" id="todayCount">—</div>  
+          <div class="today-sub" id="todaySub">加载中…</div>  
+          <div class="today-list" id="todayList"></div>  
+        </div>  
+      </div>  
+      <div class="right-block">  
+        <div class="col-header">最近互动</div>  
+        <div class="recent-list" id="recentList">  
+          <div class="right-empty">加载中…</div>  
+        </div>  
+      </div>  
+    </aside>  
+  </div>  
+</div>  
+  
+<!-- New Circle Modal -->  
+<div class="modal-overlay" id="circleModal">  
+  <div class="modal">  
+    <div class="modal-title">创建新圈子</div>  
+    <div class="modal-sub">给朋友们分个组，不同圈子看不同内容</div>  
+    <div class="modal-field">  
+      <label class="modal-label">圈子名称</label>  
+      <input class="modal-input" id="newCircleName" placeholder="如：大学同学、高中死党…">  
+    </div>  
+    <div class="modal-field">  
+      <label class="modal-label">颜色</label>  
+      <div style="display:flex;gap:8px;" id="colorPicker">  
+        <div onclick="selectColor(this,'#e8734a')" style="width:28px;height:28px;border-radius:50%;background:#e8734a;cursor:pointer;border:3px solid #e8734a;"></div>  
+        <div onclick="selectColor(this,'#6b9e78')" style="width:28px;height:28px;border-radius:50%;background:#6b9e78;cursor:pointer;border:2px solid transparent;"></div>  
+        <div onclick="selectColor(this,'#7b8fc4')" style="width:28px;height:28px;border-radius:50%;background:#7b8fc4;cursor:pointer;border:2px solid transparent;"></div>  
+        <div onclick="selectColor(this,'#e8c16a')" style="width:28px;height:28px;border-radius:50%;background:#e8c16a;cursor:pointer;border:2px solid transparent;"></div>  
+        <div onclick="selectColor(this,'#c47bb5')" style="width:28px;height:28px;border-radius:50%;background:#c47bb5;cursor:pointer;border:2px solid transparent;"></div>  
+      </div>  
+    </div>  
+    <div class="modal-row">  
+      <button class="modal-btn modal-btn-secondary" onclick="closeModal('circleModal')">取消</button>  
+      <button class="modal-btn modal-btn-primary" onclick="createCircle()">创建</button>  
+    </div>  
+  </div>  
+</div>  
+  
+<!-- Profile Modal -->  
+<div class="modal-overlay" id="profileModal">  
+  <div class="modal">  
+    <div class="modal-title">我的资料</div>  
+    <div class="profile-info">  
+      <div class="profile-big-avatar" id="profileAvatar">🐱</div>  
+      <div>  
+        <div class="profile-name" id="profileName">—</div>  
+        <div class="profile-email" id="profileEmail">—</div>  
+      </div>  
+    </div>  
+    <button class="logout-btn" onclick="doLogout()">退出登录</button>  
+    <div style="margin-top:10px;">  
+      <button class="modal-btn modal-btn-secondary" style="width:100%;" onclick="closeModal('profileModal')">关闭</button>  
+    </div>  
+  </div>  
+</div>  
+  
+<div class="toast" id="toast"></div>  
+  
+<script>  
+const SUPABASE_URL = 'https://farhnpvvqhkfuxqpugqx.supabase.co';  
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZhcmhucHZ2cWhrZnV4cXB1Z3F4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc3MTQ3MTEsImV4cCI6MjA5MzI5MDcxMX0.02krqHSqfBGwgpT3nFHy_S5Ukujt_RlHAxj-yt1Kz84';  
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);  
+  
+let currentUser = null;  
+let myProfile = null;  
+let circles = [];  
+let circlePostCounts = {};  
+let currentCircle = 'all';  
+let selectedColor = '#e8734a';  
+let selectedAvatar = '🐱';  
+let authMode = 'login';  
+  
+const MOODS = ['😊','🌟','🍜','📚','🎵','🌿','💪','🌙','☕','🎨','🏃','🐱'];  
+const COMPOSER_MOODS = ['😊', '🌟', '🍜', '📚', '🎵', '🌿', '💪', '🌙', '☕', '🎨', '🏃', '😢', '🔥', '💤'];  
+const STORAGE_BUCKET = 'post-images';  
+let moodIdx = 0;  
+let composerMood = '';  
+let pendingImageFile = null;  
+  
+// ── Avatar picker ──  
+document.getElementById('avatarPicker').innerHTML =  
+  MOODS.concat(['🦊','🐼','🐨','🦁','🐸','🌸']).map(e =>  
+    `<span onclick="pickAvatar(this,'${e}')" style="font-size:24px;cursor:pointer;padding:4px;border-radius:8px;border:2px solid transparent;transition:border-color 0.15s;">${e}</span>`  
+  ).join('');  
+  
+function renderComposerMoodRow() {  
+  const row = document.getElementById('composerMoodRow');  
+  if (!row) return;  
+  row.innerHTML =  
+    '<span class="composer-mood-label">今日心情（点选一项，可再点取消）</span>' +  
+    COMPOSER_MOODS.map(  
+      (m, i) =>  
+        `<button type="button" class="composer-mood-btn${composerMood === m ? ' on' : ''}" onclick="setComposerMoodIdx(${i})">${m}</button>`  
+    ).join('');  
+}  
+  
+function setComposerMoodIdx(i) {  
+  const m = COMPOSER_MOODS[i];  
+  composerMood = composerMood === m ? '' : m;  
+  renderComposerMoodRow();  
+}  
+  
+function onComposerImageChange(ev) {  
+  const f = ev.target.files && ev.target.files[0];  
+  if (!f) return;  
+  if (!f.type.startsWith('image/')) {  
+    showToast('请选择 JPG / PNG / WebP / GIF 图片');  
+    return;  
+  }  
+  pendingImageFile = f;  
+  const url = URL.createObjectURL(f);  
+  const prev = document.getElementById('composerPreview');  
+  const wrap = document.getElementById('composerImgWrap');  
+  if (prev) prev.src = url;  
+  if (wrap) wrap.classList.add('visible');  
+}  
+  
+function clearComposerImage() {  
+  const prev = document.getElementById('composerPreview');  
+  if (prev && prev.src && prev.src.startsWith('blob:')) URL.revokeObjectURL(prev.src);  
+  pendingImageFile = null;  
+  const inp = document.getElementById('postImageInput');  
+  if (inp) inp.value = '';  
+  const wrap = document.getElementById('composerImgWrap');  
+  if (wrap) wrap.classList.remove('visible');  
+  if (prev) prev.removeAttribute('src');  
+}  
+  
+renderComposerMoodRow();  
+  
+function pickAvatar(el, emoji) {  
+  document.querySelectorAll('#avatarPicker span').forEach(s => s.style.borderColor='transparent');  
+  el.style.borderColor = 'var(--accent)';  
+  selectedAvatar = emoji;  
+}  
+  
+// ── Auth tab ──  
+function switchAuthTab(mode) {  
+  authMode = mode;  
+  document.getElementById('loginForm').style.display   = mode==='login'    ? '' : 'none';  
+  document.getElementById('registerForm').style.display = mode==='register' ? '' : 'none';  
+  document.getElementById('loginTab').classList.toggle('active',    mode==='login');  
+  document.getElementById('registerTab').classList.toggle('active', mode==='register');  
+  document.getElementById('authErr').textContent = '';  
+}  
+  
+function setAuthErr(msg){ document.getElementById('authErr').textContent = msg; }  
+  
+async function doLogin() {  
+  const email = document.getElementById('loginEmail').value.trim();  
+  const pass = document.getElementById('loginPassword').value;  
+  if (!email || !pass) {  
+    setAuthErr('请填写邮箱和密码');  
+    return;  
+  }  
+  const btn = document.getElementById('loginBtn');  
+  btn.disabled = true;  
+  btn.textContent = '登录中…';  
+  try {  
+    const { error } = await sb.auth.signInWithPassword({ email, password: pass });  
+    if (error)  
+      setAuthErr(  
+        '登录失败：' +  
+          (error.message === 'Invalid login credentials' ? '邮箱或密码错误' : error.message)  
+      );  
+    else setAuthErr('');  
+  } catch (e) {  
+    console.error(e);  
+    setAuthErr('登录失败：网络异常，请检查网络后重试');  
+  } finally {  
+    btn.disabled = false;  
+    btn.textContent = '登录';  
+  }  
+}  
+  
+async function doRegister() {
+  const username = document.getElementById('regUsername').value.trim();
+  const email = document.getElementById('regEmail').value.trim();
+  const pass = document.getElementById('regPassword').value;
+  if (!username || !email || !pass) {
+    setAuthErr('请填写完整信息');
+    return;
+  }
+  if (pass.length < 6) {
+    setAuthErr('密码至少6位');
+    return;
+  }
+  const btn = document.getElementById('registerBtn');
+  btn.disabled = true;
+  btn.textContent = '注册中…';
+
+  const { data, error } = await sb.auth.signUp({
+    email,
+    password: pass,
+    options: {
+      data: {
+        username: username,
+        avatar: selectedAvatar,
+      },
+    },
+  });
+
+  btn.disabled = false;
+  btn.textContent = '创建账号';
+
+  if (error) {
+    setAuthErr('注册失败：' + error.message);
+    return;
+  }
+
+  setAuthErr('');
+  showToast('注册成功！欢迎加入小圈子 🎉');
+}  
+async function doLogout() {  
+  await sb.auth.signOut();  
+  closeModal('profileModal');  
+}  
+  
+// ── Auth state ──  
+// 必须在回调里尽快返回：不要在回调里 await Supabase 请求，否则会卡住 signIn / getSession 的 Promise（登录按钮一直「登录中」）。  
+sb.auth.onAuthStateChange((event, session) => {  
+  if (session?.user) {  
+    currentUser = session.user;  
+    setTimeout(() => {  
+      (async () => {  
+        try {  
+          await loadProfile();  
+        } catch (e) {  
+          console.error(e);  
+        }  
+        showApp();  
+      })();  
+    }, 0);  
+  } else {  
+    currentUser = null;  
+    myProfile = null;  
+    showAuth();  
+  }  
+});  
+  
+async function loadProfile() {  
+  const { data } = await sb.from('profiles').select('*').eq('id', currentUser.id).single();  
+  myProfile = data;  
+  if(myProfile) {  
+    document.getElementById('myAvatarBtn').textContent   = myProfile.avatar;  
+    document.getElementById('composerAvatar').textContent = myProfile.avatar;  
+    document.getElementById('profileAvatar').textContent  = myProfile.avatar;  
+    document.getElementById('profileName').textContent    = myProfile.username;  
+    document.getElementById('profileEmail').textContent   = currentUser.email;  
+  }  
+}  
+  
+function showAuth() {  
+  document.getElementById('authScreen').style.display = 'flex';  
+  document.getElementById('appLayout').classList.remove('visible');  
+}  
+function showApp() {  
+  document.getElementById('authScreen').style.display = 'none';  
+  document.getElementById('appLayout').classList.add('visible');  
+  renderFriendsList();  
+  loadCircles().catch((e) => {  
+    console.error(e);  
+    showToast('圈子或动态加载失败，请刷新页面');  
+  });  
+}  
+
+const MOCK_FRIENDS = [  
+  { name: 'Luna', avatar: '🌙', status: 'online' },  
+  { name: 'Mochi', avatar: '🍡', status: 'online' },  
+  { name: 'River', avatar: '🍃', status: 'away' },  
+  { name: 'Nova', avatar: '⭐', status: 'away' },  
+];  
+
+function escapeHtml(s) {  
+  if (s == null || s === '') return '';  
+  return String(s)  
+    .replace(/&/g, '&amp;')  
+    .replace(/</g, '&lt;')  
+    .replace(/>/g, '&gt;')  
+    .replace(/"/g, '&quot;');  
+}  
+
+function renderFriendsList() {  
+  const el = document.getElementById('friendsList');  
+  if (!el) return;  
+  el.innerHTML =  
+    MOCK_FRIENDS.map(  
+      (f) =>  
+        `<div class="friend-row">  
+          <div class="friend-avatar">${f.avatar}</div>  
+          <div class="friend-name">${escapeHtml(f.name)}</div>  
+          <span class="friend-status ${f.status === 'online' ? 'online' : 'away'}" title="${f.status === 'online' ? '在线' : '离开'}"></span>  
+        </div>`  
+    ).join('') +  
+    '<p class="friends-hint">演示好友 · 真实列表与在线状态将连接数据库后上线</p>';  
+}  
+
+async function refreshCircleCounts() {  
+  circlePostCounts = { _all: 0 };  
+  if (!circles.length) {  
+    const { count } = await sb.from('posts').select('*', { count: 'exact', head: true });  
+    circlePostCounts._all = count != null ? count : 0;  
+    return;  
+  }  
+  const ids = circles.map((c) => c.id);  
+  const { data } = await sb.from('posts').select('circle_id').in('circle_id', ids);  
+  (data || []).forEach((p) => {  
+    const id = p.circle_id;  
+    if (!id) return;  
+    circlePostCounts[id] = (circlePostCounts[id] || 0) + 1;  
+  });  
+  circlePostCounts._all = (data || []).length;  
+}  
+
+async function loadRightPanel() {  
+  if (!currentUser) return;  
+  const start = new Date();  
+  start.setHours(0, 0, 0, 0);  
+  const startIso = start.toISOString();  
+  const ids = circles.map((c) => c.id);  
+
+  const pCount = ids.length  
+    ? sb.from('posts').select('*', { count: 'exact', head: true }).gte('created_at', startIso).in('circle_id', ids)  
+    : sb.from('posts').select('*', { count: 'exact', head: true }).gte('created_at', startIso);  
+  let pList = sb  
+    .from('posts')  
+    .select('id, content, created_at, profiles(username)')  
+    .gte('created_at', startIso)  
+    .order('created_at', { ascending: false })  
+    .limit(4);  
+  if (ids.length) pList = pList.in('circle_id', ids);  
+
+  const [{ count }, { data: todayPosts }] = await Promise.all([pCount, pList]);  
+
+  const tc = document.getElementById('todayCount');  
+  const ts = document.getElementById('todaySub');  
+  const tl = document.getElementById('todayList');  
+  if (tc) tc.textContent = count != null ? String(count) : '0';  
+  if (ts) ts.textContent = '条可见圈子里的动态（今日）';  
+  if (tl) {  
+    if (!todayPosts || !todayPosts.length) {  
+      tl.innerHTML = '<div class="right-empty">今天还没有动态，发一条吧～</div>';  
+    } else {  
+      tl.innerHTML = todayPosts  
+        .map((p) => {  
+          const u = p.profiles?.username || '好友';  
+          const raw = p.content || '';  
+          const snippet = escapeHtml(raw.slice(0, 52)) + (raw.length > 52 ? '…' : '');  
+          return `<div class="today-item"><strong>${escapeHtml(u)}</strong> · ${snippet}<div class="today-item-meta">${timeAgo(p.created_at)}</div></div>`;  
+        })  
+        .join('');  
+    }  
+  }  
+
+  const recentEl = document.getElementById('recentList');  
+  const { data: myPosts } = await sb.from('posts').select('id').eq('user_id', currentUser.id).limit(80);  
+  const myIds = (myPosts || []).map((p) => p.id);  
+  if (!myIds.length) {  
+    if (recentEl)  
+      recentEl.innerHTML =  
+        '<div class="right-empty">你还没有发过动态<br>有互动时会显示在这里</div>';  
+    return;  
+  }  
+
+  const [likesRes, commentsRes] = await Promise.all([  
+    sb  
+      .from('likes')  
+      .select('post_id, user_id, profiles(username,avatar)')  
+      .in('post_id', myIds)  
+      .neq('user_id', currentUser.id)  
+      .limit(20),  
+    sb  
+      .from('comments')  
+      .select('content, created_at, user_id, profiles(username,avatar)')  
+      .in('post_id', myIds)  
+      .neq('user_id', currentUser.id)  
+      .order('created_at', { ascending: false })  
+      .limit(12),  
+  ]);  
+
+  const parts = [];  
+  (commentsRes.data || []).forEach((c) => {  
+    const who = c.profiles?.username || '某人';  
+    parts.push(  
+      `<div class="recent-item"><span class="recent-icon">💬</span><div><div class="recent-text"><strong>${escapeHtml(who)}</strong> 评论了你的动态</div><div class="recent-time">${timeAgo(c.created_at)}</div></div></div>`  
+    );  
+  });  
+  (likesRes.data || []).forEach((l) => {  
+    const who = l.profiles?.username || '某人';  
+    parts.push(  
+      `<div class="recent-item"><span class="recent-icon">❤️</span><div><div class="recent-text"><strong>${escapeHtml(who)}</strong> 点赞了你的动态</div></div></div>`  
+    );  
+  });  
+
+  if (recentEl)  
+    recentEl.innerHTML =  
+      parts.length > 0  
+        ? parts.slice(0, 14).join('')  
+        : '<div class="right-empty">暂无人点赞或评论你的动态</div>';  
+}  
+  
+// ── Circles ──  
+async function loadCircles() {  
+  const { data } = await sb.from('circles').select('*').eq('owner_id', currentUser.id).order('created_at');  
+  circles = data || [];  
+  await refreshCircleCounts();  
+  renderCircles();  
+  await loadPosts();  
+}  
+  
+function renderCircles() {  
+  const allN = circlePostCounts._all != null ? circlePostCounts._all : 0;  
+  document.getElementById('circleList').innerHTML =  
+    `<div class="circle-item ${currentCircle === 'all' ? 'active' : ''}" onclick="setCircle('all')">  
+       <div class="circle-dot" style="background:var(--accent)"></div>  
+       <div class="circle-name">全部</div>  
+       <span class="circle-count">${allN}</span>  
+     </div>` +  
+    circles  
+      .map(  
+        (c) => `  
+      <div class="circle-item ${currentCircle === c.id ? 'active' : ''}" onclick="setCircle('${c.id}')">  
+        <div class="circle-dot" style="background:${c.color}"></div>  
+        <div class="circle-name">${escapeHtml(c.name)}</div>  
+        <span class="circle-count">${circlePostCounts[c.id] || 0}</span>  
+      </div>`  
+      )  
+      .join('');  
+  
+  const sel = document.getElementById('circleSelect');  
+  sel.innerHTML =  
+    '<option value="">选择圈子（可选）</option>' +  
+    circles.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');  
+}  
+  
+function setCircle(id) {  
+  currentCircle = id;  
+  renderCircles();  
+  loadPosts();  
+}  
+  
+// ── Posts ──  
+async function loadPosts() {  
+  try {  
+    document.getElementById('postFeed').innerHTML =  
+      '<div class="loading-dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>';  
+  
+    let query = sb  
+      .from('posts')  
+      .select(  
+        `*, profiles(username,avatar), circles(name,color), likes(user_id), comments(id,content,user_id,created_at,profiles(username,avatar))`  
+      )  
+      .order('created_at', { ascending: false })  
+      .limit(30);  
+  
+    if (currentCircle !== 'all') query = query.eq('circle_id', currentCircle);  
+    else if (circles.length > 0) query = query.in('circle_id', circles.map((c) => c.id));  
+  
+    const { data, error } = await query;  
+  
+    if (error || !data || data.length === 0) {  
+      document.getElementById('postFeed').innerHTML = `  
+      <div class="feed-empty">  
+        <div class="feed-empty-icon">✨</div>  
+        <div class="feed-empty-text">还没有动态<br>先发一条和朋友分享今天吧～</div>  
+      </div>`;  
+    } else {  
+      document.getElementById('postFeed').innerHTML = data.map(renderPost).join('');  
+    }  
+    try {  
+      await refreshCircleCounts();  
+      renderCircles();  
+      await loadRightPanel();  
+    } catch (e) {  
+      console.error(e);  
+    }  
+  } catch (e) {  
+    console.error(e);  
+    document.getElementById('postFeed').innerHTML =  
+      '<div class="feed-empty"><div class="feed-empty-text">动态加载失败，请刷新页面或检查网络</div></div>';  
+  }  
+}  
+  
+function timeAgo(ts) {  
+  const diff = (Date.now() - new Date(ts)) / 1000;  
+  if(diff < 60)   return '刚刚';  
+  if(diff < 3600) return Math.floor(diff/60)+'分钟前';  
+  if(diff < 86400)return Math.floor(diff/3600)+'小时前';  
+  return Math.floor(diff/86400)+'天前';  
+}  
+  
+function renderPost(p) {  
+  const author  = p.profiles || {};  
+  const circle  = p.circles  || {};  
+  const likes   = p.likes    || [];  
+  const comments= p.comments || [];  
+  const likedByMe = likes.some(l => l.user_id === currentUser.id);  
+  
+  const commentsHtml = comments.map(c => {  
+    const cu = c.profiles || {};  
+    return `<div class="comment">  
+      <div class="comment-avatar">${cu.avatar||'👤'}</div>  
+      <div class="comment-bubble">  
+        <div class="comment-name">${cu.username||'匿名'}</div>  
+        ${c.content}  
+      </div>  
+    </div>`;  
+  }).join('');  
+  
+  return `<div class="post-card" id="post-${p.id}">  
+    <div class="post-header">  
+      <div class="post-avatar" style="background:rgba(232,115,74,0.1)">${author.avatar||'👤'}</div>  
+      <div class="post-meta">  
+        <div class="post-author">${author.username||'匿名'}</div>  
+        <div class="post-time">${timeAgo(p.created_at)}</div>  
+      </div>  
+      ${circle.name?`<span class="post-circle-tag" style="background:${circle.color}18;color:${circle.color};border:1px solid ${circle.color}30;">${circle.name}</span>`:''}  
+    </div>  
+    ${p.mood ? `<div class="post-mood">${p.mood}</div>` : ''}  
+    ${p.image_url && String(p.image_url).startsWith('http') ? `<img class="post-image" src="${String(p.image_url).replace(/"/g, '&quot;')}" alt="" loading="lazy">` : ''}  
+    <div class="post-body">${(() => {  
+      const t = (p.content || '').trim();  
+      if (t) return escapeHtml(t).replace(/\n/g, '<br>');  
+      return p.image_url ? '<span style="color:var(--muted);font-size:12px;">（附图）</span>' : ' ';  
+    })()}</div>  
+    <div class="post-footer">  
+      <button class="reaction-btn ${likedByMe?'liked':''}" onclick="toggleLike('${p.id}',${likedByMe})">  
+        ${likedByMe?'❤️':'🤍'} <span>${likes.length}</span>  
+      </button>  
+      <button class="reaction-btn" onclick="toggleComments('${p.id}')">  
+        💬 <span>${comments.length}</span>  
+      </button>  
+    </div>  
+    <div class="comments-section" id="comments-${p.id}" style="display:none;">  
+      <div id="clist-${p.id}">${commentsHtml}</div>  
+      <div class="comment-input-row">  
+        <input class="comment-input" id="cinput-${p.id}" placeholder="写条评论…">  
+        <button class="comment-send" onclick="addComment('${p.id}')">发送</button>  
+      </div>  
+    </div>  
+  </div>`;  
+}  
+  
+async function toggleLike(postId, isLiked) {  
+  if(isLiked) {  
+    await sb.from('likes').delete().eq('post_id', postId).eq('user_id', currentUser.id);  
+  } else {  
+    await sb.from('likes').insert({ post_id: postId, user_id: currentUser.id });  
+  }  
+  loadPosts();  
+}  
+  
+function toggleComments(postId) {  
+  const el = document.getElementById('comments-'+postId);  
+  el.style.display = el.style.display==='none' ? 'flex' : 'none';  
+  el.style.flexDirection = 'column';  
+  el.style.gap = '8px';  
+}  
+  
+async function addComment(postId) {  
+  const input = document.getElementById('cinput-'+postId);  
+  const text = input.value.trim();  
+  if(!text) return;  
+  input.value = '';  
+  await sb.from('comments').insert({ post_id: postId, user_id: currentUser.id, content: text });  
+  loadPosts();  
+  setTimeout(()=>toggleComments(postId), 100);  
+}  
+  
+async function submitPost() {  
+  const raw = document.getElementById('postInput').value;  
+  const content = raw.trim();  
+  if (!content && !pendingImageFile) {  
+    showToast('写点文字或选一张图片再发布～');  
+    return;  
+  }  
+  const circleId = document.getElementById('circleSelect').value || null;  
+  const btn = document.getElementById('postBtn');  
+  btn.disabled = true;  
+  btn.textContent = '发布中…';  
+  
+  let imageUrl = null;  
+  if (pendingImageFile) {  
+    if (pendingImageFile.size > 4 * 1024 * 1024) {  
+      showToast('图片请小于 4MB');  
+      btn.disabled = false;  
+      btn.textContent = '发布';  
+      return;  
+    }  
+    let ext = (pendingImageFile.name.split('.').pop() || 'jpg').toLowerCase();  
+    ext = ext.replace(/[^a-z0-9]/g, '') || 'jpg';  
+    if (!['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(ext)) ext = 'jpg';  
+    const path = `${currentUser.id}/${Date.now()}_${Math.random().toString(36).slice(2, 10)}.${ext}`;  
+    const { error: upErr } = await sb.storage.from(STORAGE_BUCKET).upload(path, pendingImageFile, {  
+      cacheControl: '3600',  
+      upsert: false,  
+      contentType: pendingImageFile.type || 'image/jpeg',  
+    });  
+    if (upErr) {  
+      console.error(upErr);  
+      showToast('图片上传失败：' + (upErr.message || '请先在 Supabase 执行桌面 indexl-supabase.sql'));  
+      btn.disabled = false;  
+      btn.textContent = '发布';  
+      return;  
+    }  
+    const { data: pub } = sb.storage.from(STORAGE_BUCKET).getPublicUrl(path);  
+    imageUrl = pub.publicUrl;  
+  }  
+  
+  const insertRow = {  
+    user_id: currentUser.id,  
+    circle_id: circleId,  
+    content: content || (imageUrl ? ' ' : ''),  
+    mood: composerMood || '',  
+  };  
+  if (imageUrl) insertRow.image_url = imageUrl;  
+  
+  const { error } = await sb.from('posts').insert(insertRow);  
+  btn.disabled = false;  
+  btn.textContent = '发布';  
+  if (error) {  
+    console.error(error);  
+    showToast('发布失败：' + (error.message || '请重试'));  
+    return;  
+  }  
+  document.getElementById('postInput').value = '';  
+  composerMood = '';  
+  renderComposerMoodRow();  
+  clearComposerImage();  
+  showToast('发布成功！✨');  
+  loadPosts();  
+}  
+  
+function insertMoodToText() {  
+  const input = document.getElementById('postInput');  
+  input.value += MOODS[moodIdx++ % MOODS.length];  
+  input.focus();  
+}  
+  
+// ── Circles CRUD ──  
+function openNewCircle(){ document.getElementById('circleModal').classList.add('open'); }  
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }  
+function selectColor(el, color) {  
+  selectedColor = color;  
+  document.querySelectorAll('#colorPicker div').forEach(d=>d.style.border='2px solid transparent');  
+  el.style.border = '3px solid '+color;  
+}  
+  
+async function createCircle() {  
+  const name = document.getElementById('newCircleName').value.trim();  
+  if(!name){ showToast('请输入圈子名称'); return; }  
+  const { error } = await sb.from('circles').insert({ owner_id: currentUser.id, name, color: selectedColor });  
+  if(error){ showToast('创建失败：'+error.message); return; }  
+  closeModal('circleModal');  
+  document.getElementById('newCircleName').value = '';  
+  showToast(`「${name}」创建成功！`);  
+  loadCircles();  
+}  
+  
+// ── Profile ──  
+function openProfile(){ document.getElementById('profileModal').classList.add('open'); }  
+  
+// ── Toast ──  
+function showToast(msg) {  
+  const t = document.getElementById('toast');  
+  t.textContent = msg; t.classList.add('show');  
+  setTimeout(()=>t.classList.remove('show'), 2500);  
+}  
+  
+// Close modals on overlay click  
+['circleModal','profileModal'].forEach(id => {  
+  document.getElementById(id).addEventListener('click', function(e){ if(e.target===this) closeModal(id); });  
+});  
+  
+// Cmd+Enter to post  
+document.getElementById('postInput')?.addEventListener('keydown', (e) => {  
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submitPost();  
+});  
+</script>  
+</body>  
+</html>  
