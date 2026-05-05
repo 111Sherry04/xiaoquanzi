@@ -666,15 +666,43 @@ async function uploadImgs(){
   return urls;
 }
 async function submitPost(){
-  const content=el('postIn').value.trim();
-  if(!content&&!selFiles.length){toast('请输入内容或选择图片');return;}
-  const btn=el('postBtn');btn.disabled=true;btn.textContent='发布中…';
-  const imgs=await uploadImgs();
-  const cid=el('circleSel').value||null;
-  await sb.from('posts').insert({user_id:me.id,circle_id:cid,content:content||'',images:imgs});
-  btn.disabled=false;btn.textContent='发布';
-  el('postIn').value='';selFiles=[];el('imgPreviews').innerHTML='';el('imgIn').value='';
-  toast('发布成功 ✨');loadPosts();
+  const content = el('postIn').value.trim();
+  if(!content && !selFiles.length){
+    toast('请输入内容或选择图片');
+    return;
+  }
+
+  const btn = el('postBtn');
+  btn.disabled = true; 
+  btn.textContent = '发布中…';
+
+  try {
+    const imgs = await uploadImgs();
+    const cid = el('circleSel').value || null;
+
+    const { error } = await sb.from('posts').insert({
+      user_id: me.id,
+      circle_id: cid,
+      content: content || '',
+      images: imgs
+    });
+
+    if(error) throw error;
+
+    toast('发布成功 ✨');
+    el('postIn').value = '';
+    selFiles = [];
+    el('imgPreviews').innerHTML = '';
+    el('imgIn').value = '';
+
+    await loadPosts();   // 立即刷新动态
+  } catch (err) {
+    console.error(err);
+    toast('发布失败：' + (err.message || '权限不足'));
+  } finally {
+    btn.disabled = false; 
+    btn.textContent = '发布';
+  }
 }
 
 // ── EMOJI ──
@@ -691,48 +719,47 @@ async function loadReqs(){
   el('reqList').innerHTML=!reqs.length?'<div style="font-size:11px;color:var(--dim)">暂无申请</div>':
     reqs.map(r=>`<div class="freq"><div class="frav">${r.profiles?.avatar||'👤'}</div><div class="frname">${r.profiles?.username||'—'}</div><div class="frbts"><button class="frbt frok" onclick="handleReq('${r.id}','${r.from_user_id}',true)">✓</button><button class="frbt frno" onclick="handleReq('${r.id}','${r.from_user_id}',false)">✕</button></div></div>`).join('');
 }
-async function sendFriendRequest(toId, toName) {
-  if (!toId || !currentUser) {
-    showToast('操作失败：用户信息无效');
+async function sendFriendReq(toId, toName){
+  if(!toId || !me){
+    toast('操作失败：用户信息无效');
     return;
   }
 
   try {
+    // 检查是否已存在申请
     const { data: existing } = await sb
       .from('friend_requests')
       .select('id,status')
-      .or(`and(from_user_id.eq.${currentUser.id},to_user_id.eq.${toId}),and(from_user_id.eq.${toId},to_user_id.eq.${currentUser.id})`)
+      .or(`and(from_user_id.eq.${me.id},to_user_id.eq.${toId}),and(from_user_id.eq.${toId},to_user_id.eq.${me.id})`)
       .maybeSingle();
 
-    if (existing) {
-      if (existing.status === 'accepted') {
-        showToast('你们已经是好友了 💕');
-      } else {
-        showToast('好友申请已存在，请等待对方处理');
-      }
+    if(existing){
+      toast(existing.status === 'accepted' ? '你们已经是好友了 💕' : '好友申请已存在');
       return;
     }
 
-    const { error: insertError } = await sb.from('friend_requests').insert({
-      from_user_id: currentUser.id,
+    // 发送申请
+    const { error } = await sb.from('friend_requests').insert({
+      from_user_id: me.id,
       to_user_id: toId,
       status: 'pending'
     });
 
-    if (insertError) throw insertError;
+    if(error) throw error;
 
     // 发送通知
     await sb.from('notifications').insert({
       user_id: toId,
-      from_user_id: currentUser.id,
+      from_user_id: me.id,
       type: 'friend_req',
-      content: `${myProfile?.username || '有人'} 向你发送了好友申请 👋`
-    }).catch(() => {});
+      content: `${myP?.username || '有人'} 向你发送了好友申请 👋`
+    }).catch(()=>{});
 
-    showToast(`已向 ${toName} 发送好友申请 👋`);
+    toast(`已向 ${toName} 发送好友申请 👋`);
+    loadReqs(); // 刷新申请列表
   } catch (err) {
-    console.error('发送好友申请失败:', err);
-    showToast('发送失败，请检查数据库权限或网络');
+    console.error('加好友失败:', err);
+    toast('加好友失败，请检查数据库权限');
   }
 }
   
