@@ -506,15 +506,39 @@ async function doLogin(){
   if(error)setErr(error.message.includes('Invalid')?'邮箱或密码错误':'登录失败：'+error.message);
 }
 async function doRegister(){
-  const name=el('rName').value.trim(),email=el('rEmail').value.trim(),pass=el('rPass').value,bio=el('rBio').value.trim();
-  if(!name||!email||!pass){setErr('请填写完整信息');return;}
-  if(pass.length<6){setErr('密码至少6位');return;}
-  const btn=el('regBtn');btn.disabled=true;btn.textContent='注册中…';
-  const{data,error}=await sb.auth.signUp({email,password:pass});
-  if(error){btn.disabled=false;btn.textContent='创建账号';setErr('注册失败：'+error.message);return;}
-  if(data.user)await sb.from('profiles').upsert({id:data.user.id,username:name,avatar:pickedAv,bio});
-  btn.disabled=false;btn.textContent='创建账号';
-  toast('注册成功！请查收验证邮件后登录 📧');switchTab('login');
+  const name = document.getElementById('regName').value.trim();
+  const email = document.getElementById('regEmail').value.trim();
+  const pass = document.getElementById('regPass').value;
+  const bio = document.getElementById('regBio').value.trim();
+
+  if(!name || !email || !pass) return setErr('请填写完整信息');
+  if(pass.length<6) return setErr('密码至少6位');
+
+  const btn = document.getElementById('registerBtn');
+  btn.disabled = true; 
+  btn.textContent = '注册中…';
+
+  try {
+    const { data, error } = await sb.auth.signUp({email, password: pass});
+    if(error) throw error;
+
+    if(data.user) {
+      await sb.from('profiles').upsert({
+        id: data.user.id,
+        username: name,
+        avatar: selectedAvatar,
+        bio: bio || ''
+      });
+    }
+
+    showToast('注册成功！请查收验证邮件后登录 📧');
+    switchTab('login');
+  } catch (err) {
+    setErr('注册失败：' + (err.message || '未知错误'));
+  } finally {
+    btn.disabled = false; 
+    btn.textContent = '创建账号';
+  }
 }
 async function doLogout(){await sb.auth.signOut();hide('profOv');}
 
@@ -663,11 +687,49 @@ async function loadReqs(){
   el('reqList').innerHTML=!reqs.length?'<div style="font-size:11px;color:var(--dim)">暂无申请</div>':
     reqs.map(r=>`<div class="freq"><div class="frav">${r.profiles?.avatar||'👤'}</div><div class="frname">${r.profiles?.username||'—'}</div><div class="frbts"><button class="frbt frok" onclick="handleReq('${r.id}','${r.from_user_id}',true)">✓</button><button class="frbt frno" onclick="handleReq('${r.id}','${r.from_user_id}',false)">✕</button></div></div>`).join('');
 }
-async function handleReq(rid,fromId,accept){
-  await sb.from('friend_requests').update({status:accept?'accepted':'declined'}).eq('id',rid);
-  if(accept){addInt(fromId,10);pushNotif(fromId,'friend',`${myP?.username} 接受了你的好友申请 🎉`);toast('已成为好友 🎉');}
-  else toast('已拒绝');
-  loadReqs();loadFriends();
+async function sendFriendRequest(toId, toName) {
+  if (!toId || !currentUser) {
+    showToast('操作失败：用户信息无效');
+    return;
+  }
+
+  try {
+    const { data: existing } = await sb
+      .from('friend_requests')
+      .select('id,status')
+      .or(`and(from_user_id.eq.${currentUser.id},to_user_id.eq.${toId}),and(from_user_id.eq.${toId},to_user_id.eq.${currentUser.id})`)
+      .maybeSingle();
+
+    if (existing) {
+      if (existing.status === 'accepted') {
+        showToast('你们已经是好友了 💕');
+      } else {
+        showToast('好友申请已存在，请等待对方处理');
+      }
+      return;
+    }
+
+    const { error: insertError } = await sb.from('friend_requests').insert({
+      from_user_id: currentUser.id,
+      to_user_id: toId,
+      status: 'pending'
+    });
+
+    if (insertError) throw insertError;
+
+    // 发送通知
+    await sb.from('notifications').insert({
+      user_id: toId,
+      from_user_id: currentUser.id,
+      type: 'friend_req',
+      content: `${myProfile?.username || '有人'} 向你发送了好友申请 👋`
+    }).catch(() => {});
+
+    showToast(`已向 ${toName} 发送好友申请 👋`);
+  } catch (err) {
+    console.error('发送好友申请失败:', err);
+    showToast('发送失败，请检查数据库权限或网络');
+  }
 }
 async function sendFriendReq(toId,toName){
   const{data:ex}=await sb.from('friend_requests').select('id,status').or(`and(from_user_id.eq.${me.id},to_user_id.eq.${toId}),and(from_user_id.eq.${toId},to_user_id.eq.${me.id})`).maybeSingle();
