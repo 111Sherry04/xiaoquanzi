@@ -506,15 +506,15 @@ async function doLogin(){
   if(error)setErr(error.message.includes('Invalid')?'邮箱或密码错误':'登录失败：'+error.message);
 }
 async function doRegister(){
-  const name = document.getElementById('regName').value.trim();
-  const email = document.getElementById('regEmail').value.trim();
-  const pass = document.getElementById('regPass').value;
-  const bio = document.getElementById('regBio').value.trim();
+  const name = document.getElementById('rName').value.trim();
+  const email = document.getElementById('rEmail').value.trim();
+  const pass = document.getElementById('rPass').value;
+  const bio = document.getElementById('rBio').value.trim();
 
   if(!name || !email || !pass) return setErr('请填写完整信息');
   if(pass.length<6) return setErr('密码至少6位');
 
-  const btn = document.getElementById('registerBtn');
+  const btn = document.getElementById('regBtn');
   btn.disabled = true; 
   btn.textContent = '注册中…';
 
@@ -526,12 +526,12 @@ async function doRegister(){
       await sb.from('profiles').upsert({
         id: data.user.id,
         username: name,
-        avatar: selectedAvatar,
+        avatar: pickedAv,        // ← 改成 pickedAv
         bio: bio || ''
       });
     }
 
-    showToast('注册成功！请查收验证邮件后登录 📧');
+    toast('注册成功！请查收验证邮件后登录 📧');
     switchTab('login');
   } catch (err) {
     setErr('注册失败：' + (err.message || '未知错误'));
@@ -556,9 +556,13 @@ sb.auth.onAuthStateChange(async(ev,session)=>{
   }
 });
 async function loadMyP(){
+  if (!me) return;
   const{data}=await sb.from('profiles').select('*').eq('id',me.id).single();
-  myP=data;
-  if(myP){el('myAv').textContent=myP.avatar;el('compAv').textContent=myP.avatar;}
+  myP = data;
+  if(myP){
+    el('myAv').textContent = myP.avatar || '🐱';
+    el('compAv').textContent = myP.avatar || '🐱';
+  }
 }
 
 // ── CIRCLES ──
@@ -731,13 +735,7 @@ async function sendFriendRequest(toId, toName) {
     showToast('发送失败，请检查数据库权限或网络');
   }
 }
-async function sendFriendReq(toId,toName){
-  const{data:ex}=await sb.from('friend_requests').select('id,status').or(`and(from_user_id.eq.${me.id},to_user_id.eq.${toId}),and(from_user_id.eq.${toId},to_user_id.eq.${me.id})`).maybeSingle();
-  if(ex){toast(ex.status==='accepted'?'你们已经是好友了 💕':'申请已发送过了');return;}
-  await sb.from('friend_requests').insert({from_user_id:me.id,to_user_id:toId});
-  pushNotif(toId,'friend_req',`${myP?.username} 向你发送了好友申请 👋`);
-  toast(`已向 ${toName} 发送好友申请 👋`);
-}
+  
 async function loadFriends(){
   const{data:sent}=await sb.from('friend_requests').select('to_user_id,profiles!friend_requests_to_user_id_fkey(id,username,avatar)').eq('from_user_id',me.id).eq('status','accepted');
   const{data:recv}=await sb.from('friend_requests').select('from_user_id,profiles!friend_requests_from_user_id_fkey(id,username,avatar)').eq('to_user_id',me.id).eq('status','accepted');
